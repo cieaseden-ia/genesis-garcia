@@ -1,0 +1,2 @@
+gradio
+cerebras_cloud_sdk
