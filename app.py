@@ -3,11 +3,11 @@ import gradio as gr
 from google import genai
 from google.genai import types
 
-# Inicialización de Google GenAI
-# Asegúrate de configurar GEMINI_API_KEY en las variables de entorno de Render
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Inicialización del cliente oficial de Google GenAI usando GENESIS_URL como clave/endpoint si es necesario, 
+# o leyendo la variable de entorno solicitada por el usuario.
+client = genai.Client(api_key=os.getenv("GENESIS_URL"))
 
-# Modelo optimizado de Gemini
+# Modelo activo actualizado compatible con las nuevas especificaciones de la API
 MODELO_ACTIVO = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
@@ -106,7 +106,7 @@ These strict rules may NEVER be broken or violated under any circumstances.
 )
 
 def responder(mensaje, historial):
-    # Formatear el historial de Gradio al formato exacto requerido por el SDK de Google GenAI
+    # Formatear el historial de Gradio adaptado al SDK de Google GenAI
     historial_gemini = []
     for elemento in historial:
         if isinstance(elemento, dict):
@@ -124,7 +124,7 @@ def responder(mensaje, historial):
                     historial_gemini.append({"role": "model", "parts": [asistente]})
 
     try:
-        # Crear la sesión de chat con el system instruction configurado
+        # Crear la sesión de chat con el SDK actualizado
         chat = client.chats.create(
             model=MODELO_ACTIVO,
             history=historial_gemini if historial_gemini else None,
@@ -135,7 +135,7 @@ def responder(mensaje, historial):
             )
         )
 
-        # Enviar mensaje con respuesta en streaming
+        # Transmitir la respuesta en tiempo real
         response = chat.send_message_stream(mensaje)
         
         respuesta_completa = ""
