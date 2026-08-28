@@ -182,7 +182,7 @@ ejemplos = [
 demo = gr.ChatInterface(
     fn=responder,
     title="Genesis Garcia - Asesor Empresarial & Coach Empresarial.",
-    description="Genesis IA, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
+    description="Genesis Garcia, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
     examples=ejemplos,
     cache_examples=False
 )
