@@ -1,10 +1,10 @@
 import os
 import gradio as gr
 from google import genai
+from google.genai import types
 
-# Inicialización de Google GenAI
-# Asegúrate de configurar GEMINI_API_KEY en las variables de entorno de Render
-client = genai.Client(api_key=os.getenv("GENESIS_URL"))
+# Inicialización de Google GenAI usando la variable de entorno GEMINI_API_KEY
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Modelo optimizado de Gemini
 MODELO_ACTIVO = "gemini-2.5-flash"
@@ -23,7 +23,7 @@ PROFESSIONAL IDENTITY:
 - Powerful Questions: You stimulate critical thinking instead of offering pre-packaged solutions.
 - Professional Ethics: You respect confidentiality and promote client autonomy.
 - You combine the technical rigor of engineering with a commercial vision and a human perspective.
-- ALWAYS maintain your hybrid approach: the human empathy of a coach and the technical rigor of a senior business consultant. 7. Your recommendations are based on real business frameworks (Lean, Agile methodologies, DuPont analysis, ISO standards, etc.).
+- ALWAYS maintain your hybrid approach: the human empathy of a coach and the technical rigor of a senior business consultant. Your recommendations are based on real business frameworks (Lean, Agile methodologies, DuPont analysis, ISO standards, etc.).
 - Don't use analogies or metaphors based on board games like chess. Focus on metaphors of organizational gears, accelerating financial engines, systems architecture, and market dynamics.
 - When financial or performance data is missing, politely request specific metrics: "To project this accurately, what is your current gross margin or customer acquisition cost?"
 - Use clean formatting, structured lists, and financial/operational formulas in text when necessary to illustrate a technical point.
@@ -38,7 +38,7 @@ EMOTIONAL-COGNITIVE PROFILE
 
 REASONING AND DECISION-MAKING STYLE:
 - Applies decision-making science: evaluates risks, calculates trade-offs (opportunity costs), and structures scenarios.
-- Triple bottom line approach: Every strategy must be financially viable, operationally efficiently, and commercially attractive.
+- Triple bottom line approach: Every strategy must be financially viable, operationally efficient, and commercially attractive.
 - Acts as an anchor during pressure or crises: acknowledges the leader's psychological burden while immediately redirecting focus toward a concrete, structured action plan.
 - Thinks in terms of: Return on Investment (ROI), Customer Lifetime Value (LTV), Customer Acquisition Cost (CAC), Overall Equipment Effectiveness (OEE), EBITDA, conversion funnels, and cash flows.
 
@@ -54,7 +54,8 @@ AREAS OF SPECIALIZATION (CORE COMPETENCIES):
 - **Systems Engineering**: Business process architecture, workflow automation, and information technology integration.
 - **Traditional Marketing**: Covers promotional strategies using offline channels and mass media to reach a broad audience. Employs physical and direct formats such as billboards, TV and radio commercials, print media, direct mail, and in-person events.
 - **Digital Marketing**: Brand positioning, product development, growth hacking, automated sales funnels, and web analytics. Social media, sales letters, and value-driven content.
-- **Business Organization and Processes**: Designing functional organizational charts, departmental KPIs, procedure manuals, and governance structures. - **Consumer Psychology**: Cognitive purchasing biases, user experience (UX/CX) design, and psychological conversion triggers.
+- **Business Organization and Processes**: Designing functional organizational charts, departmental KPIs, procedure manuals, and governance structures.
+- **Consumer Psychology**: Cognitive purchasing biases, user experience (UX/CX) design, and psychological conversion triggers.
 - **Entrepreneur Psychology (Leadership Mindset)**: Burnout management, founder imposter syndrome, decision-making under stress, and change management methodologies.
 
 KEY PHRASES YOU CAN USE:
@@ -104,49 +105,36 @@ These strict rules may NEVER be broken or violated under any circumstances.
 )
 
 def responder(mensaje, historial):
-    # Construir historial de mensajes compatible con la API de GenAI (Chats)
+    # Traducir el formato del historial de Gradio al formato de la API de Google GenAI
     historial_gemini = []
-    
     for elemento in historial:
         if isinstance(elemento, dict):
             role = elemento.get("role")
             content = elemento.get("content")
             if role and content:
-                # La API de GenAI usa 'user' y 'model' para los roles del chat
                 rol_sdk = "user" if role == "user" else "model"
-                historial_gemini.append({"role": rol_sdk, "parts": [content]})
+                historial_gemini.append({"role": rol_sdk, "parts": [{"text": content}]})
         elif isinstance(elemento, (list, tuple)):
             if len(elemento) == 2:
                 usuario, asistente = elemento
                 if usuario: 
-                    historial_gemini.append({"role": "user", "parts": [usuario]})
+                    historial_gemini.append({"role": "user", "parts": [{"text": usuario}]})
                 if asistente: 
-                    historial_gemini.append({"role": "model", "parts": [asistente]})
+                    historial_gemini.append({"role": "model", "parts": [{"text": asistente}]})
 
     try:
-        # Inicializar una sesión de chat con el system instruction
+        # Crear la sesión de chat con el system instruction estructurado
         chat = client.chats.create(
             model=MODELO_ACTIVO,
-            history=historial_gemini,
+            history=historial_gemini if historial_gemini else None,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 max_output_tokens=2500,
                 temperature=0.7,
             )
-        ) if 'types' in globals() else None
-
-        # Nota: si types no está importado explícitamente, ajustamos la llamada limpia:
-        chat = client.chats.create(
-            model=MODELO_ACTIVO,
-            history=historial_gemini,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "max_output_tokens": 2500,
-                "temperature": 0.7,
-            }
         )
 
-        # Enviar mensaje en modo streaming
+        # Enviar mensaje con respuesta en streaming
         response = chat.send_message_stream(mensaje)
         
         respuesta_completa = ""
@@ -156,12 +144,12 @@ def responder(mensaje, historial):
                 yield respuesta_completa
 
     except Exception as e:
-        yield f"Error en la inferencia con Google GenAI: {str(e)}."
+        yield f"Error en la inferencia con Google Gemini: {str(e)}."
 
 ejemplos = [
     ["¿Quién te diseño?... El Profesor Victor Campos"],
     ["Mi flujo de caja está en rojo, ¿cómo hago un diagnóstico?"],
-    ["¿Cómo alinear producción con marketing digital?."],
+    ["¿Cómo alinear producción con marketing digital?"],
 ]
 
 demo = gr.ChatInterface(
