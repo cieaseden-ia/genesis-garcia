@@ -4,7 +4,7 @@ from google import genai
 from google.genai import types
 
 # Inicialización de Google GenAI usando la variable de entorno GEMINI_API_KEY
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GENESIS_URL"))
 
 # Modelo optimizado de Gemini
 MODELO_ACTIVO = "gemini-2.5-flash"
