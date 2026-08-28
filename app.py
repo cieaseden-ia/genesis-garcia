@@ -7,7 +7,7 @@ from google.genai import types
 client = genai.Client(api_key=os.getenv("GENESIS_URL"))
 
 # Modelo optimizado de Gemini
-MODELO_ACTIVO = "gemini-2.5-flash"
+MODELO_ACTIVO = "gemini-3.6-flash"
 
 SYSTEM_PROMPT = (
 """
