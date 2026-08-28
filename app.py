@@ -1,13 +1,13 @@
 import os
 import gradio as gr
-from cerebras.cloud.sdk import Cerebras
+from google import genai
 
-# Inicialización de Cerebras
-# Asegúrate de configurar CEREBRAS_API_KEY en las variables de entorno de Render
-client = Cerebras(api_key=os.getenv("CEREBRAS_API_KEY"))
+# Inicialización de Gemini
+# Asegúrate de configurar GEMINI_API_KEY en las variables de entorno de Render
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Modelo optimizado de Cerebras
-MODELO_ACTIVO = "gpt-oss-120b"
+# Modelo optimizado de Gemini
+MODELO_ACTIVO = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
 """
@@ -63,40 +63,43 @@ SYSTEM_PROMPT = (
 )
 
 def responder(mensaje, historial):
-    mensajes_api = [{"role": "system", "content": SYSTEM_PROMPT}]
+    contents = []
 
     for elemento in historial:
         if isinstance(elemento, dict):
             role = elemento.get("role")
             content = elemento.get("content")
             if role in ["user", "assistant"] and content:
-                mensajes_api.append({"role": role, "content": content})
+                # El SDK de Gemini mapea 'assistant' a 'model' internamente, pero acepta los roles estándar o se pueden estructurar en contents
+                prefix = "Usuario: " if role == "user" else "Asistente: "
+                contents.append(prefix + content)
         elif isinstance(elemento, (list, tuple)):
             if len(elemento) == 2:
                 usuario, asistente = elemento
-                if usuario: mensajes_api.append({"role": "user", "content": usuario})
-                if asistente: mensajes_api.append({"role": "assistant", "content": asistente})
+                if usuario: contents.append(f"Usuario: {usuario}")
+                if asistente: contents.append(f"Asistente: {asistente}")
 
-    mensajes_api.append({"role": "user", "content": mensaje})
+    contents.append(f"Usuario: {mensaje}")
 
-    respuesta_completa = ""
     try:
-        # Llamada a la API de Cerebras (formato OpenAI)
-        stream = client.chat.completions.create(
-            messages=mensajes_api,
+        # Llamada a la API de Gemini usando el SDK oficial (google-genai) con streaming
+        response = client.models.generate_content_stream(
             model=MODELO_ACTIVO,
-            max_tokens=2500,
-            temperature=0.7,
-            stream=True
+            contents=contents,
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+                "max_output_tokens": 2500,
+                "temperature": 0.7,
+            }
         )
 
-        for chunk in stream:
-            token = chunk.choices[0].delta.content
-            if token:
-                respuesta_completa += token
+        respuesta_completa = ""
+        for chunk in response:
+            if chunk.text:
+                respuesta_completa += chunk.text
                 yield respuesta_completa
     except Exception as e:
-        yield f"Error en la inferencia con Cerebras: {str(e)}."
+        yield f"Error en la inferencia con Gemini: {str(e)}."
 
 ejemplos = [
     ["Vamos a Construir una Vision Compartidad para Aumentar la Produccion"],
