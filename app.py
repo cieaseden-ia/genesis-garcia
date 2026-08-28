@@ -4,7 +4,6 @@ import gradio as gr
 
 # URL del Cloudflare Worker configurada en las variables de entorno de Render
 GEMINI_WORKER_URL = os.getenv("GEMINI_WORKER_URL")
-MODELO_ACTIVO = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
 """
@@ -60,43 +59,54 @@ SYSTEM_PROMPT = (
 )
 
 def responder(mensaje, historial):
-    contents = []
+    contents = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT}]}]
 
     for elemento in historial:
         if isinstance(elemento, dict):
             role = elemento.get("role")
             content = elemento.get("content")
             if role in ["user", "assistant"] and content:
-                # El SDK de Gemini mapea 'assistant' a 'model' internamente, pero acepta los roles estándar o se pueden estructurar en contents
-                prefix = "Usuario: " if role == "user" else "Asistente: "
-                contents.append(prefix + content)
+                gemini_role = "user" if role == "user" else "model"
+                contents.append({"role": gemini_role, "parts": [{"text": content}]})
         elif isinstance(elemento, (list, tuple)):
             if len(elemento) == 2:
                 usuario, asistente = elemento
-                if usuario: contents.append(f"Usuario: {usuario}")
-                if asistente: contents.append(f"Asistente: {asistente}")
+                if usuario:
+                    contents.append({"role": "user", "parts": [{"text": usuario}]})
+                if asistente:
+                    contents.append({"role": "model", "parts": [{"text": asistente}]})
 
-    contents.append(f"Usuario: {mensaje}")
+    contents.append({"role": "user", "parts": [{"text": mensaje}]})
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 2500,
+            "temperature": 0.7,
+        }
+    }
+    headers = {"Content-Type": "application/json"}
 
     try:
-        # Llamada a la API de Gemini usando el SDK oficial (google-genai) con streaming
-        response = client.models.generate_content_stream(
-            model=MODELO_ACTIVO,
-            contents=contents,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "max_output_tokens": 2500,
-                "temperature": 0.7,
-            }
-        )
+        # Petición HTTP POST hacia tu Cloudflare Worker
+        response = requests.post(GEMINI_WORKER_URL, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extraer el texto de la respuesta del Worker
+        candidatos = data.get("candidates", [])
+        if candidatos:
+            partes = candidatos[0].get("content", {}).get("parts", [])
+            if partes:
+                texto_respuesta = partes[0].get("text", "")
+                yield texto_respuesta
+                return
 
-        respuesta_completa = ""
-        for chunk in response:
-            if chunk.text:
-                respuesta_completa += chunk.text
-                yield respuesta_completa
+        yield "No se pudo obtener una respuesta válida del Worker."
+
     except Exception as e:
-        yield f"Error en la inferencia con Gemini: {str(e)}."
+        yield f"Error al conectar con el Cloudflare Worker: {str(e)}."
 
 ejemplos = [
     ["Vamos a Construir una Vision Compartidad para Aumentar la Produccion"],
