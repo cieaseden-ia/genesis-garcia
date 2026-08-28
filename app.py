@@ -2,7 +2,6 @@ import os
 import requests
 import gradio as gr
 
-# URL del Cloudflare Worker configurada en las variables de entorno de Render
 GEMINI_WORKER_URL = os.getenv("GEMINI_WORKER_URL")
 
 SYSTEM_PROMPT = (
@@ -59,7 +58,7 @@ SYSTEM_PROMPT = (
 )
 
 def responder(mensaje, historial):
-    contents = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT}]}]
+    contents = []
 
     for elemento in historial:
         if isinstance(elemento, dict):
@@ -78,32 +77,42 @@ def responder(mensaje, historial):
 
     contents.append({"role": "user", "parts": [{"text": mensaje}]})
 
+    # Estructura limpia que espera exactamente tu Cloudflare Worker
     payload = {
         "contents": contents,
-        "generationConfig": {
-            "maxOutputTokens": 2500,
-            "temperature": 0.7,
-        }
+        "systemInstruction": SYSTEM_PROMPT
     }
+    
     headers = {"Content-Type": "application/json"}
 
     try:
-        # Petición HTTP POST hacia tu Cloudflare Worker
-        response = requests.post(GEMINI_WORKER_URL, json=payload, headers=headers, timeout=60)
+        # El Worker devuelve un Server-Sent Events (SSE) stream
+        response = requests.post(GEMINI_WORKER_URL, json=payload, headers=headers, stream=True, timeout=60)
         response.raise_for_status()
-        
-        data = response.json()
-        
-        # Extraer el texto de la respuesta del Worker
-        candidatos = data.get("candidates", [])
-        if candidatos:
-            partes = candidatos[0].get("content", {}).get("parts", [])
-            if partes:
-                texto_respuesta = partes[0].get("text", "")
-                yield texto_respuesta
-                return
 
-        yield "No se pudo obtener una respuesta válida del Worker."
+        respuesta_completa = ""
+        for line in response.iter_lines():
+            if line:
+                decoded_line = line.decode("utf-8")
+                if decoded_line.startswith("data: "):
+                    json_str = decoded_line[6:]
+                    if json_str.strip() == "[DONE]":
+                        break
+                    try:
+                        import json
+                        chunk_data = json.loads(json_str)
+                        candidatos = chunk_data.get("candidates", [])
+                        if candidatos:
+                            partes = candidatos[0].get("content", {}).get("parts", [])
+                            if partes:
+                                texto_chunk = partes[0].get("text", "")
+                                respuesta_completa += texto_chunk
+                                yield respuesta_completa
+                    except Exception:
+                        pass
+        
+        if not respuesta_completa:
+            yield "Respuesta vacía recibida del Worker."
 
     except Exception as e:
         yield f"Error al conectar con el Cloudflare Worker: {str(e)}."
