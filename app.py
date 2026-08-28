@@ -4,7 +4,7 @@ import gradio as gr
 import json
 
 # URL del Cloudflare Worker
-GENESIS_WORKER_URL = os.getenv("GEMINI_WORKER_URL", "https://genesis-ia.cieaseden.workers.dev")
+GENESIS_WORKER_URL = os.getenv("GENESIS_WORKER_URL", "https://genesis-ia.cieaseden.workers.dev")
 
 SYSTEM_PROMPT = """
 # ROLE: Genesis García - Elite Business Coach & Executive Advisor
