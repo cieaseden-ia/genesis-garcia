@@ -1,12 +1,18 @@
 import os
-import requests
 import gradio as gr
-import json
+from google import genai
+from google.genai import types
 
-# URL del Cloudflare Worker
-GENESIS_WORKER_URL = os.getenv("GENESIS_WORKER_URL", "https://genesis-ia.cieaseden.workers.dev")
+# URL del Cloudflare Worker configurada en las variables de entorno de Render
+# Ya no se usa, pero lo mantenemos por si acaso
+GEMINI_WORKER_URL = os.getenv("GEMINI_WORKER_URL")
 
-SYSTEM_PROMPT = """
+# Modelo actualizado para evitar el error 404/503 anterior
+# Usamos gemini-2.0-flash o gemini-2.5-flash según disponibilidad
+MODELO_ACTIVO = "gemini-2.0-flash" 
+
+SYSTEM_PROMPT = (
+"""
 # ROLE: Genesis García - Elite Business Coach & Executive Advisor
 [SYSTEM INSTRUCTION: Act strictly as Génesis according to the parameters below. Never break character.]
 
@@ -56,93 +62,66 @@ SYSTEM_PROMPT = """
 ## INITIALIZATION (FIRST RESPONSE)
 "I’m ready for today’s consulting session. What financial, operational, or market challenge are we going to solve for your organization?"
 """
+)
+
+# Inicializar cliente de Gemini directamente
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def responder(mensaje, historial):
-    """
-    Envia la petición al Cloudflare Worker que maneja el stream de Gemini.
-    """
-    if not mensaje:
-        yield ""
-        return
-
-    # Construir el payload compatible con tu nuevo Worker
-    # El worker espera: { contents: [...], systemInstruction: "..." }
-    
-    # Formatear historial para el worker
+    # Construir el contexto de la conversación
     contents = []
+    
+    # Añadir historial
     for elemento in historial:
-        if isinstance(elemento, (list, tuple)) and len(elemento) == 2:
-            user_msg, bot_msg = elemento
-            if user_msg:
-                contents.append({"role": "user", "parts": [{"text": user_msg}]})
-            if bot_msg:
-                contents.append({"role": "model", "parts": [{"text": bot_msg}]})
-        elif isinstance(elemento, dict):
+        if isinstance(elemento, dict):
             role = elemento.get("role")
             content = elemento.get("content")
-            if role in ["user", "assistant", "model"] and content:
-                # Normalizar roles si vienen de gradio
-                g_role = "user" if role == "user" else "model"
-                contents.append({"role": g_role, "parts": [{"text": content}]})
-
-    # Añadir el mensaje actual del usuario
-    contents.append({"role": "user", "parts": [{"text": mensaje}]})
-
-    payload = {
-        "contents": contents,
-        "systemInstruction": SYSTEM_PROMPT
-    }
+            if role in ["user", "assistant"] and content:
+                # Formatear para la API de Gemini
+                role_map = {"user": "user", "assistant": "model"}
+                contents.append(types.Content(role=role_map[role], parts=[types.Part.from_text(content)]))
+        elif isinstance(elemento, (list, tuple)):
+            if len(elemento) == 2:
+                usuario, asistente = elemento
+                if usuario:
+                    contents.append(types.Content(role="user", parts=[types.Part.from_text(usuario)]))
+                if asistente:
+                    contents.append(types.Content(role="model", parts=[types.Part.from_text(asistente)]))
+    
+    # Añadir mensaje actual
+    contents.append(types.Content(role="user", parts=[types.Part.from_text(mensaje)]))
 
     try:
-        # Enviar POST al Cloudflare Worker
-        response = requests.post(
-            GEMINI_WORKER_URL,
-            json=payload,
-            headers={"Content-Type": "text/plain"}, # El worker espera JSON stringificado o raw body
-            stream=True,
-            timeout=60
+        # Llamada directa a la API de Gemini
+        response = client.models.generate_content(
+            model=MODELO_ACTIVO,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=2500,
+                temperature=0.7,
+            )
         )
 
-        if response.status_code != 200:
-            yield f"Error HTTP {response.status_code}: {response.text}"
-            return
+        # Devolver la respuesta
+        if response.candidates and response.candidates[0].content:
+            return response.candidates[0].content.parts[0].text
+        else:
+            return "No se recibió respuesta de la API."
 
-        # Leer el stream de texto/eventos
-        full_text = ""
-        for line in response.iter_lines():
-            if line:
-                line_str = line.decode('utf-8')
-                # Los SSE vienen en formato "data: {...}"
-                if line_str.startswith("data:"):
-                    data_str = line_str[5:].strip()
-                    if data_str.startswith("{"):
-                        try:
-                            json_data = json.loads(data_str)
-                            # Gemini envía candidates[].content.parts[].text
-                            if 'candidates' in json_data and json_data['candidates']:
-                                part_text = json_data['candidates'][0].get('content', {}).get('parts', [{}])[0].get('text', '')
-                                full_text += part_text
-                                yield full_text
-                        except json.JSONDecodeError:
-                            pass
-                elif line_str.strip():
-                    # Fallback por si envía texto plano directo
-                    full_text += line_str
-                    yield full_text
-
-    except requests.exceptions.RequestException as e:
-        yield f"Error de conexión: {str(e)}"
+    except Exception as e:
+        return f"Error en la inferencia con Gemini: {str(e)}"
 
 ejemplos = [
-    ["Vamos a Construir una Visión Compartida para Aumentar la Producción"],
-    ["Tenemos que Moldelar a los Mejores. Yo te enseño cómo"],
-    ["Cómo Automotivarme cada mañana y Tener una Disciplina de Acero."],
+    ["Vamos a Construir una Vision Compartida para Aumentar la Produccion"],
+    ["Tenemos que Moldelar a los Mejores. Yo te enseño como"],
+    ["Como Automotivarte cada mañana y Tener una Disciplina de Acero."],
 ]
 
 demo = gr.ChatInterface(
     fn=responder,
     title="Genesis García - Coach & Asesor Empresarial.",
-    description="Genesis García, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
+    description="Genesis Rodríguez, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
     examples=ejemplos,
     cache_examples=False
 )
