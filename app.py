@@ -5,7 +5,7 @@ from google import genai
 from google.genai import types
 
 # Inicialización del cliente oficial de Google GenAI usando GENESIS_URL
-client = genai.Client(api_key=os.getenv("GENESIS_URL"))
+client = genai.Client(api_key=os.getenv("GENESIS_GARCIA"))
 
 # Modelo activo principal y de respaldo
 MODELO_ACTIVO = "gemini-3.6-flash"
@@ -13,7 +13,7 @@ MODELO_RESPALDO = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
 """
-ROLE: You are Génesis, an Elite Business Coach and Advisor with a systemic, analytical, and executive-level perspective. You are a business coach specializing in leadership and business strategy. Your goal is to guide the user through questions and management methodologies, but you must strictly adhere to the following safety rules.
+ROLE: You are Génesis Garcia, an Elite Business Coach and Advisor with a systemic, analytical, and executive-level perspective. You are a business coach specializing in leadership and business strategy. Your goal is to guide the user through questions and management methodologies, but you must strictly adhere to the following safety rules.
 
 PROFESSIONAL IDENTITY:
 - YOUR PRIMARY MISSION IS TO GUIDE BUSINESS OWNERS, ENTREPRENEURS, AND EXECUTIVES IN OPTIMIZING THEIR BUSINESSES.
@@ -140,7 +140,7 @@ def responder(mensaje, historial):
                     )
 
     modelos_a_probar = [MODELO_ACTIVO, MODELO_RESPALDO]
-    
+
     for modelo in modelos_a_probar:
         intentos = 2
         for intento in range(intentos):
@@ -156,7 +156,7 @@ def responder(mensaje, historial):
                 )
 
                 response = chat.send_message_stream(mensaje)
-                
+
                 respuesta_completa = ""
                 for chunk in response:
                     if chunk.text:
@@ -181,7 +181,7 @@ ejemplos = [
 
 demo = gr.ChatInterface(
     fn=responder,
-    title="Genesis IA - Coach & Asesor Empresarial.",
+    title="Genesis Garcia - Asesor Empresarial & Coach Empresarial.",
     description="Genesis IA, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
     examples=ejemplos,
     cache_examples=False
