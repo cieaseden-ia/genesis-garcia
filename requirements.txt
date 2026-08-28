@@ -1,3 +1,2 @@
-google-generativeai
-flask
-gunicorn
+gradio>=4.0.0
+google-genai
