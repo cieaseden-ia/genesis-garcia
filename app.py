@@ -3,11 +3,12 @@ import gradio as gr
 from google import genai
 from google.genai import types
 
-# Inicialización de Google GenAI usando la variable de entorno GEMINI_API_KEY
-client = genai.Client(api_key=os.getenv("GENESIS_URL"))
+# Inicialización de Google GenAI
+# Asegúrate de configurar GEMINI_API_KEY en las variables de entorno de Render
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Modelo optimizado de Gemini
-MODELO_ACTIVO = "gemini-3.6-flash"
+MODELO_ACTIVO = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
 """
@@ -105,7 +106,7 @@ These strict rules may NEVER be broken or violated under any circumstances.
 )
 
 def responder(mensaje, historial):
-    # Traducir el formato del historial de Gradio al formato de la API de Google GenAI
+    # Formatear el historial de Gradio al formato exacto requerido por el SDK de Google GenAI
     historial_gemini = []
     for elemento in historial:
         if isinstance(elemento, dict):
@@ -113,17 +114,17 @@ def responder(mensaje, historial):
             content = elemento.get("content")
             if role and content:
                 rol_sdk = "user" if role == "user" else "model"
-                historial_gemini.append({"role": rol_sdk, "parts": [{"text": content}]})
+                historial_gemini.append({"role": rol_sdk, "parts": [content]})
         elif isinstance(elemento, (list, tuple)):
             if len(elemento) == 2:
                 usuario, asistente = elemento
                 if usuario: 
-                    historial_gemini.append({"role": "user", "parts": [{"text": usuario}]})
+                    historial_gemini.append({"role": "user", "parts": [usuario]})
                 if asistente: 
-                    historial_gemini.append({"role": "model", "parts": [{"text": asistente}]})
+                    historial_gemini.append({"role": "model", "parts": [asistente]})
 
     try:
-        # Crear la sesión de chat con el system instruction estructurado
+        # Crear la sesión de chat con el system instruction configurado
         chat = client.chats.create(
             model=MODELO_ACTIVO,
             history=historial_gemini if historial_gemini else None,
