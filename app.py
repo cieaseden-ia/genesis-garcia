@@ -1,12 +1,9 @@
 import os
+import requests
 import gradio as gr
-from google import genai
 
-# Inicialización de Gemini
-# Asegúrate de configurar GEMINI_API_KEY en las variables de entorno de Render
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Modelo optimizado de Gemini
+# URL del Cloudflare Worker configurada en las variables de entorno de Render
+GEMINI_WORKER_URL = os.getenv("GEMINI_WORKER_URL")
 MODELO_ACTIVO = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
