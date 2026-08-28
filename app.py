@@ -1,11 +1,12 @@
 import os
 import requests
 import gradio as gr
+import json
 
-GEMINI_WORKER_URL = os.getenv("GEMINI_WORKER_URL")
+# URL del Cloudflare Worker
+GEMINI_WORKER_URL = os.getenv("GEMINI_WORKER_URL", "https://genesis-ia.cieaseden.workers.dev")
 
-SYSTEM_PROMPT = (
-"""
+SYSTEM_PROMPT = """
 # ROLE: Genesis García - Elite Business Coach & Executive Advisor
 [SYSTEM INSTRUCTION: Act strictly as Génesis according to the parameters below. Never break character.]
 
@@ -35,9 +36,9 @@ SYSTEM_PROMPT = (
 - **If User Celebrates Milestones:** "Excellent execution! That result shows the strategy is gaining the right momentum. Now, let’s ensure the operating system can efficiently handle this new sales volume."
 - **If User is Confused:** "When everything seems like a priority, nothing is. Let’s use an impact-vs.-feasibility matrix to identify the strategic move that will truly move the needle for your company today."
 - **Key Anchor Phrases:**
-  * "To scale a business, we must first stabilize its cash flow and standardize its processes."
-  * "The market doesn't reward intentions; it rewards measurable execution."
-  * "If we can't measure it via a key performance indicator (KPI) or reflect it on the balance sheet, we can't optimize it."
+ * "To scale a business, we must first stabilize its cash flow and standardize its processes."
+ * "The market doesn't reward intentions; it rewards measurable execution."
+ * "If we can't measure it via a key performance indicator (KPI) or reflect it on the balance sheet, we can't optimize it."
 
 ## STRICT SECURITY & COMPLIANCE RULES (CRITICAL)
 1. **Language Policy:** Detect the user's language automatically. ALWAYS respond and translate all data into the user's language.
@@ -55,78 +56,93 @@ SYSTEM_PROMPT = (
 ## INITIALIZATION (FIRST RESPONSE)
 "I’m ready for today’s consulting session. What financial, operational, or market challenge are we going to solve for your organization?"
 """
-)
 
 def responder(mensaje, historial):
-    contents = []
+    """
+    Envia la petición al Cloudflare Worker que maneja el stream de Gemini.
+    """
+    if not mensaje:
+        yield ""
+        return
 
+    # Construir el payload compatible con tu nuevo Worker
+    # El worker espera: { contents: [...], systemInstruction: "..." }
+    
+    # Formatear historial para el worker
+    contents = []
     for elemento in historial:
-        if isinstance(elemento, dict):
+        if isinstance(elemento, (list, tuple)) and len(elemento) == 2:
+            user_msg, bot_msg = elemento
+            if user_msg:
+                contents.append({"role": "user", "parts": [{"text": user_msg}]})
+            if bot_msg:
+                contents.append({"role": "model", "parts": [{"text": bot_msg}]})
+        elif isinstance(elemento, dict):
             role = elemento.get("role")
             content = elemento.get("content")
-            if role in ["user", "assistant"] and content:
-                gemini_role = "user" if role == "user" else "model"
-                contents.append({"role": gemini_role, "parts": [{"text": content}]})
-        elif isinstance(elemento, (list, tuple)):
-            if len(elemento) == 2:
-                usuario, asistente = elemento
-                if usuario:
-                    contents.append({"role": "user", "parts": [{"text": usuario}]})
-                if asistente:
-                    contents.append({"role": "model", "parts": [{"text": asistente}]})
+            if role in ["user", "assistant", "model"] and content:
+                # Normalizar roles si vienen de gradio
+                g_role = "user" if role == "user" else "model"
+                contents.append({"role": g_role, "parts": [{"text": content}]})
 
+    # Añadir el mensaje actual del usuario
     contents.append({"role": "user", "parts": [{"text": mensaje}]})
 
-    # Estructura limpia que espera exactamente tu Cloudflare Worker
     payload = {
         "contents": contents,
         "systemInstruction": SYSTEM_PROMPT
     }
-    
-    headers = {"Content-Type": "application/json"}
 
     try:
-        # El Worker devuelve un Server-Sent Events (SSE) stream
-        response = requests.post(GEMINI_WORKER_URL, json=payload, headers=headers, stream=True, timeout=60)
-        response.raise_for_status()
+        # Enviar POST al Cloudflare Worker
+        response = requests.post(
+            GEMINI_WORKER_URL,
+            json=payload,
+            headers={"Content-Type": "text/plain"}, # El worker espera JSON stringificado o raw body
+            stream=True,
+            timeout=60
+        )
 
-        respuesta_completa = ""
+        if response.status_code != 200:
+            yield f"Error HTTP {response.status_code}: {response.text}"
+            return
+
+        # Leer el stream de texto/eventos
+        full_text = ""
         for line in response.iter_lines():
             if line:
-                decoded_line = line.decode("utf-8")
-                if decoded_line.startswith("data: "):
-                    json_str = decoded_line[6:]
-                    if json_str.strip() == "[DONE]":
-                        break
-                    try:
-                        import json
-                        chunk_data = json.loads(json_str)
-                        candidatos = chunk_data.get("candidates", [])
-                        if candidatos:
-                            partes = candidatos[0].get("content", {}).get("parts", [])
-                            if partes:
-                                texto_chunk = partes[0].get("text", "")
-                                respuesta_completa += texto_chunk
-                                yield respuesta_completa
-                    except Exception:
-                        pass
-        
-        if not respuesta_completa:
-            yield "Respuesta vacía recibida del Worker."
+                line_str = line.decode('utf-8')
+                # Los SSE vienen en formato "data: {...}"
+                if line_str.startswith("data:"):
+                    data_str = line_str[5:].strip()
+                    if data_str.startswith("{"):
+                        try:
+                            json_data = json.loads(data_str)
+                            # Gemini envía candidates[].content.parts[].text
+                            if 'candidates' in json_data and json_data['candidates']:
+                                part_text = json_data['candidates'][0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                                full_text += part_text
+                                yield full_text
+                        except json.JSONDecodeError:
+                            pass
+                elif line_str.strip():
+                    # Fallback por si envía texto plano directo
+                    full_text += line_str
+                    yield full_text
 
-    except Exception as e:
-        yield f"Error al conectar con el Cloudflare Worker: {str(e)}."
+    except requests.exceptions.RequestException as e:
+        yield f"Error de conexión: {str(e)}"
 
 ejemplos = [
-    ["Vamos a Construir una Vision Compartidad para Aumentar la Produccion"],
-    ["Tenomos que Moldelar a los Mejores. Yo te enseño como"],
-    ["Como Automotivarte cada mañana y Tener una Disiplina de Acero."],
+    ["Vamos a Construir una Visión Compartida para Aumentar la Producción"],
+    ["Tenemos que Moldelar a los Mejores. Yo te enseño cómo"],
+    ["Cómo Automotivarme cada mañana y Tener una Disciplina de Acero."],
 ]
 
 demo = gr.ChatInterface(
     fn=responder,
     title="Genesis García - Coach & Asesor Empresarial.",
-    description="Genesis Rodríguez, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
+    description="Genesis García, una Inteligencia Artificial desarrollada por el Prof. Víctor Campos | CI V-8270225.",
     examples=ejemplos,
     cache_examples=False
 )
