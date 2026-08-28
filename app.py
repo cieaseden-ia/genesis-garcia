@@ -3,12 +3,11 @@ import gradio as gr
 from google import genai
 from google.genai import types
 
-# Inicialización del cliente oficial de Google GenAI usando GENESIS_URL como clave/endpoint si es necesario, 
-# o leyendo la variable de entorno solicitada por el usuario.
+# Inicialización del cliente oficial de Google GenAI usando GENESIS_URL
 client = genai.Client(api_key=os.getenv("GENESIS_URL"))
 
-# Modelo activo actualizado compatible con las nuevas especificaciones de la API
-MODELO_ACTIVO = "gemini-2.5-flash"
+# Modelo activo actualizado a gemini-3.6-flash según la directiva del sistema
+MODELO_ACTIVO = "gemini-3.6-flash"
 
 SYSTEM_PROMPT = (
 """
@@ -124,7 +123,7 @@ def responder(mensaje, historial):
                     historial_gemini.append({"role": "model", "parts": [asistente]})
 
     try:
-        # Crear la sesión de chat con el SDK actualizado
+        # Crear la sesión de chat con el modelo actualizado
         chat = client.chats.create(
             model=MODELO_ACTIVO,
             history=historial_gemini if historial_gemini else None,
