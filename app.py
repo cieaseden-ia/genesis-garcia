@@ -5,7 +5,7 @@ from google import genai
 from google.genai import types
 
 # Inicialización del cliente oficial de Google GenAI usando GENESIS_URL
-client = genai.Client(api_key=os.getenv("GENESIS_GARCIA"))
+client = genai.Client(api_key=os.getenv("Genesis_Garcia"))
 
 # Modelo activo principal y de respaldo
 MODELO_ACTIVO = "gemini-3.6-flash"
@@ -174,7 +174,7 @@ def responder(mensaje, historial):
                     yield f"Error en la inferencia con Google Gemini tras múltiples intentos: {error_str}."
 
 ejemplos = [
-    ["¿Quién te diseño?... El Profesor Victor Campos"],
+    ["Soy Ingeniera Industrial ¿Quién cual es tu pregunta?"],
     ["Mi flujo de caja está en rojo, ¿cómo hago un diagnóstico?"],
     ["¿Cómo alinear producción con marketing digital?"],
 ]
